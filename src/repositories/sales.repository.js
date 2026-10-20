@@ -63,6 +63,72 @@ export class SalesRepository {
         });
     }
 
+    async updateSale(id, saleData, items) {
+        return await db.transaction(async (tx) => {
+            // Fetch data penjualan eksis berserta item lama
+            const existingSale = await tx.query.sales.findFirst({
+                where: eq(sales.id, id),
+                with: { saleDetails: true }
+            });
+
+            if (!existingSale) return null;
+
+            // Hitung ulang total harga jika items dikirimkan, atau pakai items lama
+            let totalPrice = existingSale.totalPrice;
+            if (items && items.length > 0) {
+                totalPrice = String(items.reduce((acc, item) => acc + (Number(item.price) * Number(item.qty)), 0));
+            }
+
+            // 1. Update data header penjualan
+            const [updatedSale] = await tx
+                .update(sales)
+                .set({
+                    customerName: saleData.customerName ?? existingSale.customerName,
+                    customerPhone: saleData.customerPhone ?? existingSale.customerPhone,
+                    paymentMethod: saleData.paymentMethod ?? existingSale.paymentMethod,
+                    paymentProof: saleData.paymentProof ?? existingSale.paymentProof,
+                    notes: saleData.notes ?? existingSale.notes,
+                    status: saleData.status ?? existingSale.status,
+                    totalPrice,
+                    updatedAt: new Date()
+                })
+                .where(eq(sales.id, id))
+                .returning();
+
+            // 2. Jika ada pembaruan item
+            if (items && items.length > 0) {
+                // Hapus detail item transaksi lama
+                await tx.delete(saleDetails).where(eq(saleDetails.saleId, id));
+
+                // Insert detail item baru
+                for (const item of items) {
+                    const subtotal = Number(item.price) * Number(item.qty);
+
+                    await tx.insert(saleDetails).values({
+                        saleId: id,
+                        productId: item.productId,
+                        price: String(item.price),
+                        qty: Number(item.qty),
+                        subtotal: String(subtotal)
+                    });
+
+                    // Potong stok produk jika status transaksi berubah menjadi non-draft (e.g. 'Paid')
+                    if (saleData.status && saleData.status !== 'draft' && existingSale.status === 'draft') {
+                        await tx
+                            .update(products)
+                            .set({
+                                stock: sql`${products.stock} - ${Number(item.qty)}`,
+                                updatedAt: new Date()
+                            })
+                            .where(eq(products.id, item.productId));
+                    }
+                }
+            }
+
+            return updatedSale;
+        });
+    }
+
     // Filter query berdasarkan companyId
     async findAll({ companyId, search, status, startDate, endDate, page = 1, limit = 10 }) {
         const offset = (page - 1) * limit;
@@ -144,7 +210,7 @@ export class SalesRepository {
             if (!existingSale) return null;
 
             // Revert product stock if sale was active (not Draft)
-            if (existingSale.status !== 'Draft' && existingSale.status !== 'Cancel') {
+            if (existingSale.status !== 'draft' && existingSale.status !== 'cancel') {
                 for (const detail of existingSale.saleDetails) {
                     await tx
                         .update(products)
@@ -159,7 +225,7 @@ export class SalesRepository {
             const [cancelledSale] = await tx
                 .update(sales)
                 .set({
-                    status: 'Cancel',
+                    status: 'cancel',
                     updatedAt: new Date(),
                 })
                 .where(eq(sales.id, id))

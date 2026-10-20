@@ -67,7 +67,7 @@ export const updateSale = async (req, res) => {
         }
 
         // Only allow editing if current status is Draft
-        if (existingSale.status !== 'Draft') {
+        if (existingSale.status !== 'draft') {
             return res.status(400).json({
                 status: false,
                 message: 'Cannot edit transaction. Only transactions with status Draft can be edited.',
@@ -107,6 +107,7 @@ export const cancelSale = async (req, res) => {
             data: cancelled,
         });
     } catch (error) {
+        console.log(error)
         return res.status(500).json({ status: false, message: error.message });
     }
 };
