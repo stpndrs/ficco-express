@@ -82,7 +82,7 @@ export class InventoryRepository {
                 category: true,
                 unit: true,
             },
-            orderBy: [desc(products.updatedAt)],
+            orderBy: [desc(products.createdAt)],
             limit,
             offset,
         });
