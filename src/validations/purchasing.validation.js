@@ -16,6 +16,7 @@ const purchasingItemSchema = z.object({
 
 export const createPurchasingSchema = z.object({
     supplierId: z.string().uuid('Format ID supplier tidak valid').optional().nullable(),
+    code: z.string().min(1, 'Purchasing code is required'),
     date: z.string().or(z.date()).transform((val) => new Date(val)),
     paymentProof: z.string().optional().nullable(),
     items: z.array(purchasingItemSchema).min(1, 'Minimal harus ada 1 item pembelian'),

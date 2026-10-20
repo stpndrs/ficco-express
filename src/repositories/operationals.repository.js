@@ -3,30 +3,11 @@ import { operationals } from '../db/schema.js';
 import { eq, like, and, sql, desc, or, gte, lte } from 'drizzle-orm';
 
 export class OperationalsRepository {
-    // Generate code OP0001, OP0002...
-    async generateCode() {
-        const [lastOp] = await db
-            .select({ code: operationals.code })
-            .from(operationals)
-            .orderBy(desc(operationals.createdAt))
-            .limit(1);
-
-        if (!lastOp || !lastOp.code.startsWith('OP')) {
-            return 'OP0001';
-        }
-
-        const currentNum = parseInt(lastOp.code.replace('OP', ''), 10);
-        const nextNum = isNaN(currentNum) ? 1 : currentNum + 1;
-        return `OP${String(nextNum).padStart(4, '0')}`;
-    }
-
     async createOperational(data) {
-        const code = await this.generateCode();
-
         const [newOp] = await db
             .insert(operationals)
             .values({
-                code,
+                code: data.code,
                 title: data.title,
                 amount: String(data.amount),
                 date: data.date,

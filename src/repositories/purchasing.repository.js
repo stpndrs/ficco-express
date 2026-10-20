@@ -3,22 +3,6 @@ import { purchasings, purchasingDetails, materials, suppliers } from '../db/sche
 import { eq, like, and, gte, lte, sql, desc } from 'drizzle-orm';
 
 export class PurchasingRepository {
-    async generateCode() {
-        const [lastPurchasing] = await db
-            .select({ code: purchasings.code })
-            .from(purchasings)
-            .orderBy(desc(purchasings.createdAt))
-            .limit(1);
-
-        if (!lastPurchasing || !lastPurchasing.code.startsWith('PO')) {
-            return 'PO0001';
-        }
-
-        const currentNum = parseInt(lastPurchasing.code.replace('PO', ''), 10);
-        const nextNum = isNaN(currentNum) ? 1 : currentNum + 1;
-        return `PO${String(nextNum).padStart(4, '0')}`;
-    }
-
     async createSupplier(companyId, supplierData) {
         const [newSupplier] = await db.insert(suppliers).values({
             companyId: companyId,
@@ -36,10 +20,8 @@ export class PurchasingRepository {
 
     async createPurchasing(purchasingData, items) {
         return await db.transaction(async (tx) => {
-            const code = await this.generateCode();
-
             const [newPurchasing] = await tx.insert(purchasings).values({
-                code,
+                code: purchasingData.code,
                 supplierId: purchasingData.supplierId,
                 date: purchasingData.date,
                 paymentProof: purchasingData.paymentProof,

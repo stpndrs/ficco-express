@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const createOperationalSchema = z.object({
+    code: z.string().min(1, 'Code is required'),
     title: z.string().min(1, 'Title is required'),
     amount: z.coerce.number().positive('Amount must be greater than 0'),
     date: z.string().or(z.date()).transform((val) => new Date(val)),

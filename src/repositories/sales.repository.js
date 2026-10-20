@@ -3,31 +3,14 @@ import { sales, saleDetails, products } from '../db/schema.js';
 import { eq, like, and, gte, lte, sql, desc, or } from 'drizzle-orm';
 
 export class SalesRepository {
-    async generateCode() {
-        const [lastSale] = await db
-            .select({ code: sales.code })
-            .from(sales)
-            .orderBy(desc(sales.createdAt))
-            .limit(1);
-
-        if (!lastSale || !lastSale.code.startsWith('SE')) {
-            return 'SE0001';
-        }
-
-        const currentNum = parseInt(lastSale.code.replace('SE', ''), 10);
-        const nextNum = isNaN(currentNum) ? 1 : currentNum + 1;
-        return `SE${String(nextNum).padStart(4, '0')}`;
-    }
-
     // Tambahkan companyId pada transaksi pembuatan penjualan
     async createTransaction(companyId, saleData, items) {
         return await db.transaction(async (tx) => {
-            const code = await this.generateCode();
             const totalPrice = items.reduce((acc, item) => acc + item.price * item.qty, 0);
 
             const [newSale] = await tx.insert(sales).values({
                 companyId, // ERD update: Menyimpan FK company_id
-                code,
+                code: saleData.code,
                 status: saleData.status || 'Draft',
                 customerName: saleData.customerName,
                 customerPhone: saleData.customerPhone,

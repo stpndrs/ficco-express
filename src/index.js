@@ -13,6 +13,7 @@ import materialsRoutes from './routes/materials.routes.js';
 import operationalsRoutes from './routes/operationals.routes.js';
 import usersRoutes from './routes/users.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
+import codeRoutes from './routes/code.routes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -39,6 +40,7 @@ app.use('/api/production', productionRoutes);
 app.use('/api/operationals', operationalsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/code', codeRoutes);
 
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 
