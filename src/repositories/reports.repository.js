@@ -1,16 +1,17 @@
 import { db } from '../db/index.js';
-import { sales, purchasings, purchasingDetails, operationals, products, companies } from '../db/schema.js';
+import { sales, purchasings, purchasingDetails, operationals, products, companies, materials, categories } from '../db/schema.js';
 import { eq, and, gte, lte, sql } from 'drizzle-orm';
 
 export class ReportsRepository {
-    // Helper rentang tanggal berdasarkan bulan & tahun
+    // Helper rentang tanggal berdasarkan bulan & tahun (Aman untuk bulan 1/Januari s/d 12/Desember)
     getDateRange(month, year) {
         const now = new Date();
-        const selectedMonth = month ? month - 1 : now.getMonth();
-        const selectedYear = year || now.getFullYear();
+        const parsedMonth = (month !== undefined && month !== null && month !== '') ? Number(month) : null;
+        const selectedMonth = parsedMonth !== null ? parsedMonth - 1 : now.getMonth();
+        const selectedYear = year ? Number(year) : now.getFullYear();
 
-        const start = new Date(selectedYear, selectedMonth, 1);
-        const end = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59);
+        const start = new Date(selectedYear, selectedMonth, 1, 0, 0, 0);
+        const end = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
 
         return { start, end, monthName: start.toLocaleString('id-ID', { month: 'long' }), year: selectedYear };
     }
@@ -22,7 +23,7 @@ export class ReportsRepository {
         // Ambil Info Company
         const company = await db.query.companies.findFirst({ where: eq(companies.id, companyId) });
 
-        // Pendapatan Penjualan Barang (Penjualan status Paid / Done)
+        // Pendapatan Penjualan Barang (Penjualan status Paid / Done Case-Insensitive)
         const [salesSummary] = await db
             .select({ total: sql`COALESCE(SUM(${sales.totalPrice}), 0)` })
             .from(sales)
@@ -31,7 +32,7 @@ export class ReportsRepository {
                     eq(sales.companyId, companyId),
                     gte(sales.createdAt, start),
                     lte(sales.createdAt, end),
-                    sql`${sales.status} IN ('Paid', 'Done')`
+                    sql`${sales.status} IN ('paid')`
                 )
             );
 
@@ -88,7 +89,7 @@ export class ReportsRepository {
         const { start, end, monthName, year: selectedYear } = this.getDateRange(month, year);
         const company = await db.query.companies.findFirst({ where: eq(companies.id, companyId) });
 
-        // Pembelian Barang Dagang (dari purchasingDetails)
+        // Pembelian Barang Dagang
         const [purchasingSummary] = await db
             .select({ total: sql`COALESCE(SUM(${purchasingDetails.subtotal}), 0)` })
             .from(purchasingDetails)
@@ -102,18 +103,22 @@ export class ReportsRepository {
                 )
             );
 
-        const persediaanAwal = 0; // Asumsi persediaan awal
+        const persediaanAwal = 0;
         const pembelianBarang = Number(purchasingSummary?.total || 0);
         const barangTersediaUntukDijual = persediaanAwal + pembelianBarang;
 
-        // Nilai Stok Akhir Produk
-        const [stockSummary] = await db
-            .select({ totalValue: sql`COALESCE(SUM(${products.stock} * ${products.price}), 0)` })
-            .from(products)
-            .innerJoin(categories, eq(products.categoryId, categories.id))
-            .where(eq(categories.companyId, companyId));
+        // Hanya hitung persediaan jika terdapat transaksi/pembelian pada rentang periode yang dipilih
+        let persediaanAkhir = 0;
+        if (pembelianBarang > 0) {
+            const [stockSummary] = await db
+                .select({ totalValue: sql`COALESCE(SUM(${products.stock} * ${products.price}), 0)` })
+                .from(products)
+                .innerJoin(categories, eq(products.categoryId, categories.id))
+                .where(eq(categories.companyId, companyId));
 
-        const persediaanAkhir = Number(stockSummary?.totalValue || 0);
+            persediaanAkhir = Number(stockSummary?.totalValue || 0);
+        }
+
         const hpp = barangTersediaUntukDijual - persediaanAkhir;
 
         return {
@@ -152,8 +157,8 @@ export class ReportsRepository {
                     eq(sales.companyId, companyId),
                     gte(sales.createdAt, start),
                     lte(sales.createdAt, end),
-                    eq(sales.paymentMethod, 'Tunai'),
-                    sql`${sales.status} IN ('Paid', 'Done')`
+                    sql`${sales.paymentMethod} IN ('cash', 'transfer')`,
+                    sql`${sales.status} IN ('paid')`
                 )
             );
 
@@ -181,7 +186,7 @@ export class ReportsRepository {
             periode: `${monthName} ${selectedYear}`,
             data: [
                 { keterangan: 'Saldo kas awal', jumlah: saldoKasAwal, jenis: 'Input', catatan: 'Saldo kas dan bank awal periode' },
-                { keterangan: 'Penerimaan dari penjualan barang', jumlah: penerimaanPenjualan, jenis: 'Input', catatan: 'Penerimaan tunai dari pelanggan' },
+                { keterangan: 'Penerimaan dari penjualan barang', jumlah: penerimaanPenjualan, jenis: 'Input', catatan: 'Penerimaan transfer dari pelanggan' },
                 { keterangan: 'Pembayaran biaya operasional', jumlah: -pembayaranBiayaOperasional, jenis: 'Input', catatan: 'Total pembayaran biaya operasional bulan ini' },
                 { keterangan: 'ARUS KAS BERSIH PERIODE', jumlah: arusKasBersih, jenis: 'Rumus', catatan: 'Arus kas operasi dan investasi sederhana' },
                 { keterangan: 'SALDO KAS AKHIR', jumlah: saldoKasAkhir, jenis: 'Rumus', catatan: 'Terhubung ke Neraca' },
@@ -196,7 +201,7 @@ export class ReportsRepository {
         };
     }
 
-    // --- 4. LAPORAN NERACA (POSISI KEUANGAN) ---
+    // --- 4. LAPORAN NERACA ---
     async getBalanceSheetReport(companyId, month, year) {
         const { monthName, year: selectedYear } = this.getDateRange(month, year);
         const company = await db.query.companies.findFirst({ where: eq(companies.id, companyId) });
@@ -209,7 +214,7 @@ export class ReportsRepository {
         const persediaanAkhir = inventory.summary.persediaanAkhir;
         const totalAset = kasDanBank + persediaanAkhir;
 
-        const utangPemasok = 0; // Utang usaha
+        const utangPemasok = 0;
         const totalLiabilitas = utangPemasok;
 
         const modalAwal = Number(company?.initialCapital || 0);

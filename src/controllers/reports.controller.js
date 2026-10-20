@@ -4,22 +4,25 @@ import { PDFReportService } from '../services/pdfReport.service.js';
 
 const reportsRepo = new ReportsRepository();
 
+const getCompanyId = (req) => req.user?.companyId || req.companyId;
+
 export const getIncomeStatement = async (req, res) => {
     try {
+        const companyId = getCompanyId(req);
         const { month, year } = req.query;
-        const companyId = req.companyId;
 
-        const report = await reportsRepo.getIncomeStatement(companyId, month, year);
-        return res.status(200).json({ status: true, message: 'Laporan Laba Rugi berhasil diambil', data: report });
+        const data = await reportsRepo.getIncomeStatement(companyId, month, year);
+        return res.status(200).json({ status: true, message: 'Laporan Laba Rugi berhasil diambil', data });
     } catch (error) {
+        console.log(error)
         return res.status(500).json({ status: false, message: error.message });
     }
 };
 
 export const exportIncomeStatementExcel = async (req, res) => {
     try {
+        const companyId = getCompanyId(req);
         const { month, year } = req.query;
-        const companyId = req.companyId;
 
         const report = await reportsRepo.getIncomeStatement(companyId, month, year);
         const workbook = ExcelReportService.createStyledWorkbook(
@@ -41,8 +44,8 @@ export const exportIncomeStatementExcel = async (req, res) => {
 
 export const exportIncomeStatementPDF = async (req, res) => {
     try {
+        const companyId = getCompanyId(req);
         const { month, year } = req.query;
-        const companyId = req.companyId;
 
         const report = await reportsRepo.getIncomeStatement(companyId, month, year);
         res.setHeader('Content-Type', 'application/pdf');
@@ -57,8 +60,9 @@ export const exportIncomeStatementPDF = async (req, res) => {
 // --- Inventory Report ---
 export const getInventoryReport = async (req, res) => {
     try {
+        const companyId = getCompanyId(req);
         const { month, year } = req.query;
-        const report = await reportsRepo.getInventoryReport(req.companyId, month, year);
+        const report = await reportsRepo.getInventoryReport(companyId, month, year);
         return res.status(200).json({ status: true, message: 'Laporan Persediaan berhasil diambil', data: report });
     } catch (error) {
         return res.status(500).json({ status: false, message: error.message });
@@ -67,8 +71,9 @@ export const getInventoryReport = async (req, res) => {
 
 export const exportInventoryExcel = async (req, res) => {
     try {
+        const companyId = getCompanyId(req);
         const { month, year } = req.query;
-        const report = await reportsRepo.getInventoryReport(req.companyId, month, year);
+        const report = await reportsRepo.getInventoryReport(companyId, month, year);
         const workbook = ExcelReportService.createStyledWorkbook(
             'LAPORAN PERSEDIAAN BARANG',
             report.companyName,
@@ -89,8 +94,9 @@ export const exportInventoryExcel = async (req, res) => {
 // --- Cash Flow Report ---
 export const getCashFlowReport = async (req, res) => {
     try {
+        const companyId = getCompanyId(req);
         const { month, year } = req.query;
-        const report = await reportsRepo.getCashFlowReport(req.companyId, month, year);
+        const report = await reportsRepo.getCashFlowReport(companyId, month, year);
         return res.status(200).json({ status: true, message: 'Laporan Arus Kas berhasil diambil', data: report });
     } catch (error) {
         return res.status(500).json({ status: false, message: error.message });
@@ -99,8 +105,9 @@ export const getCashFlowReport = async (req, res) => {
 
 export const exportCashFlowExcel = async (req, res) => {
     try {
+        const companyId = getCompanyId(req);
         const { month, year } = req.query;
-        const report = await reportsRepo.getCashFlowReport(req.companyId, month, year);
+        const report = await reportsRepo.getCashFlowReport(companyId, month, year);
         const workbook = ExcelReportService.createStyledWorkbook(
             'LAPORAN ARUS KAS',
             report.companyName,
@@ -121,8 +128,9 @@ export const exportCashFlowExcel = async (req, res) => {
 // --- Balance Sheet Report ---
 export const getBalanceSheetReport = async (req, res) => {
     try {
+        const companyId = getCompanyId(req);
         const { month, year } = req.query;
-        const report = await reportsRepo.getBalanceSheetReport(req.companyId, month, year);
+        const report = await reportsRepo.getBalanceSheetReport(companyId, month, year);
         return res.status(200).json({ status: true, message: 'Laporan Neraca berhasil diambil', data: report });
     } catch (error) {
         return res.status(500).json({ status: false, message: error.message });
@@ -131,10 +139,10 @@ export const getBalanceSheetReport = async (req, res) => {
 
 export const exportBalanceSheetExcel = async (req, res) => {
     try {
+        const companyId = getCompanyId(req);
         const { month, year } = req.query;
-        const report = await reportsRepo.getBalanceSheetReport(req.companyId, month, year);
+        const report = await reportsRepo.getBalanceSheetReport(companyId, month, year);
 
-        // Flatten Neraca data for Excel
         const rows = [
             ...report.data.aset,
             ...report.data.liabilitas,
